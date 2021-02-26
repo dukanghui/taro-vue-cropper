@@ -23,12 +23,12 @@
       <view class="bg_bottom"></view>
     </view>
     <image class="img" :src="imgSrc" @touchstart='img_touch_start($event)' @touchmove='img_touch_move($event)' @touchend='img_touch_end()' :style="{
-						width: imgWidth * scale + 'px',
-						height: imgHeight * scale + 'px',
-						top: imgTop - (imgHeight * (scale - 1)) / 2 + 'px',
-						left: imgLeft - (imgWidth * (scale - 1)) / 2 + 'px'
+						width: imgWidth + 'px',
+						height: imgHeight + 'px',
+						top: imgTop + 'px',
+						left: imgLeft + 'px'
 					}" />
-    <canvas canvasId="cropper-canvasid" class="cropper-canvas" :disableScroll='false' :style="{
+    <canvas canvasId="cropper-canvasid" class="cropper-canvas" :style="{
 						width: canvas_width + 'px',
 						height: canvas_height + 'px',
 						left: canvas_left + 'px',
@@ -66,9 +66,6 @@ export default {
       cut_height: 200, //裁剪框的高度
       cut_left: 0, //裁剪框相对可使用窗口的左边距
       cut_top: 0, //裁剪框相对可使用窗口的上边距
-      scale: 1, //默认图片的放大倍数
-      max_scale: 2, //图片可以放大的最大倍数
-      min_scale: 0.5, // 图片可以缩小的最小倍数
       hypotenuse_length: 0, // 斜边长
       //触摸事件的相对位置
       img_touch_relative: [
@@ -212,8 +209,8 @@ export default {
         let top = e.touches[0].clientY - this.img_touch_relative[0].y;
         if (left > this.cut_left) left = this.cut_left // 图片左边距不大于裁剪框左边距
         if (top > this.cut_top) top = this.cut_top // 图片顶边距不大于裁剪框顶边距
-        if (left < (this.cut_left + this.cut_width - this.imgWidth)) left = (this.cut_left + this.cut_width - this.imgWidth)
-        if (top < (this.cut_top + this.cut_height - this.imgHeight)) top = (this.cut_top + this.cut_height - this.imgHeight)
+        if ((left + this.imgWidth) < (this.cut_left + this.cut_width)) left = (this.cut_left + this.cut_width - this.imgWidth)
+        if ((top + this.imgHeight) < (this.cut_top + this.cut_height)) top = (this.cut_top + this.cut_height - this.imgHeight)
         this.imgLeft = left
         this.imgTop = top
       } else if (e.touches.length >= 2 && !this.touch_pointer_one) {
@@ -242,13 +239,18 @@ export default {
             y: e.touches[1].clientY - this.imgTop - this.imgHeight / 2,
           },
         ];
-        // this.scale = newScale
+        
         let newWidth = this.imgWidth * newScale
         let newHeight = this.imgHeight * newScale
-        let top = (newHeight - this.imgHeight) / 2
-        let left = (newWidth - this.imgWidth) / 2
-        this.imgTop = this.imgTop + top
-        this.imgLeft = this.imgLeft + left
+        let top =  this.imgTop - (newHeight - this.imgHeight) / 2
+        let left = this.imgLeft - (newWidth - this.imgWidth) / 2
+
+        if (left > this.cut_left) left = this.cut_left // 图片左边距不大于裁剪框左边距
+        if (top > this.cut_top) top = this.cut_top // 图片顶边距不大于裁剪框顶边距
+        if ((left + newWidth) < (this.cut_left + this.cut_width)) return // left = (this.cut_left + this.cut_width - newWidth)
+        if ((top + newHeight) < (this.cut_top + this.cut_height)) return // top = (this.cut_top + this.cut_height - newHeight)
+        this.imgTop = top
+        this.imgLeft = left
         this.imgWidth = this.imgWidth * newScale
         this.imgHeight = this.imgHeight * newScale
       }
@@ -261,21 +263,22 @@ export default {
      * 导出图片的本地地址
      */
     handleSave() {
-      const { cut_height, cut_width, cutRatio, quality } = this;
+      const { cut_height, cut_width, cutRatio } = this;
       return new Promise((resolve, reject) => {
         this.handleDraw(() => {
           setTimeout(() => {
             wx.canvasToTempFilePath({
               width: cut_width,
               height: cut_height,
-              destWidth: this.destWidth || cut_width,
-              destHeight: this.destWidth ? this.destWidth / cutRatio : cut_height,
+              destWidth: cut_width,
+              destHeight: cut_height,
               canvasId: "cropper-canvasid",
               fileType: "png",
-              quality: quality,
+              quality: 1,
               success: res => {
                 console.log(res, "成功");
-                this.$emit('setPreview', res.tempFilePath)
+                // this.$emit('setPreview', res.tempFilePath)
+                this.upImgs(res.tempFilePath)
                 resolve(res);
               },
               fail: err => {
@@ -283,58 +286,63 @@ export default {
                 reject(err);
               },
             }); // }, this.$scope //不这样写会报错
-          }, 200)
+          }, 500)
         })
+      })
+    },
+    upImgs(imgUrl) {
+      wx.showLoading({
+        title: '加载中...',
+        mask: true,
+        duration: 50000
+      })
+      wx.uploadFile({
+        url: this.$utils.domain + '/web/webUploadAction/uploadImg.action',
+        filePath: imgUrl,
+        name: 'image',
+        header: {
+          'content-type': 'multipart/form-data'
+        },
+        formData: {
+          folder: 'crop',
+          uid: 'app-poster'
+        },
+        success: res => {
+          wx.hideLoading()
+          res = JSON.parse(res.data)
+          let obj = res.obj || {}
+          if (res.success && obj.filepath) {
+            this.$toast('上传成功')
+            this.$emit('setPreview', obj.filepath)
+          } else {
+            this.$toast(res.msg || '上传失败')
+          }
+        }
       })
     },
     /**
      * 绘制图片
      */
     handleDraw(callback) {
-      let {
-        cut_height,
-        cut_width,
-        cut_left,
-        cut_top,
-        angle,
-        scale,
-        imgWidth,
-        imgHeight,
-        imgLeft,
-        imgTop,
-        imgSrc,
-      } = this;
-
-      this.canvas_height = cut_height
-      this.canvas_width = cut_width
-      this.canvas_left = cut_left
-      this.canvas_top = cut_top
-
-      imgWidth = imgWidth * scale;
-      imgHeight = imgHeight * scale;
+      this.canvas_height = this.cut_height
+      this.canvas_width = this.cut_width
+      this.canvas_left = this.cut_left
+      this.canvas_top = this.cut_top
+      
       // 图片和裁剪框的相对距离
-      let distX = imgLeft - (imgWidth * (scale - 1)) / 2 - cut_left;
-      let distY = imgTop - (imgHeight * (scale - 1)) / 2 - cut_top;
+      let distX = this.imgLeft - this.cut_left;
+      let distY = this.imgTop - this.cut_top;
       console.log(this.ctx, "ctx前");
 
       // 根据图像的旋转角度，旋转画布的坐标轴,
-      //为了旋转中心在图片的中心，需要先移动下画布的坐标轴
-      this.ctx.translate(
-        distX + imgWidth / 2,
-        distY + imgHeight / 2
-      );
-      this.ctx.rotate((angle * Math.PI) / 180);
-      this.ctx.translate(
-        -distX - imgWidth / 2,
-        -distY - imgHeight / 2
-      );
+      // 为了旋转中心在图片的中心，需要先移动下画布的坐标轴
+      this.ctx.translate(distX + this.imgWidth / 2, distY + this.imgHeight / 2);
+      this.ctx.translate(-distX - this.imgWidth / 2, -distY - this.imgHeight / 2);
       console.log(this.ctx, "ctx");
       //根据相对距离移动画布的原点
       this.ctx.translate(distX, distY);
-
       // 绘制图像
-
-      this.ctx.drawImage(imgSrc, 0, 0, imgWidth, imgHeight);
+      this.ctx.drawImage(this.imgSrc, 0, 0, this.imgWidth, this.imgHeight);
       this.ctx.draw(false, () => {
         callback && callback();
       });

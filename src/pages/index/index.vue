@@ -1,12 +1,9 @@
 <template>
   <view class="index">
+    <image v-if="previewUrl" :src="$oss + '/' + previewUrl" mode="widthFix" />
     <button @tap='handleSelectImg()'>选择图片</button>
-    <view class="img-wrapper" v-if="previewUrl">
-      <image :src="previewUrl" mode="widthFix" />
-    </view>
-
-    <view v-if="!previewUrl && originUrl">
-      <ImageCropper @setPreview="setPreview($event)" :cutRatio=(3/1) :imgPath='originUrl'></ImageCropper>
+    <view v-if="showCrop">
+      <ImageCropper @setPreview="setPreview($event)" :cutRatio=(1) :imgPath='originUrl'></ImageCropper>
     </view>
   </view>
 </template>
@@ -17,8 +14,9 @@ export default {
   name: 'Index',
   data() {
     return {
-      previewUrl: null,
-      originUrl: 'https://tuixiaomi.oss-cn-beijing.aliyuncs.com/app/poster/logo.png', // null,
+      showCrop: false,
+      previewUrl: '',
+      originUrl: '', //'https://tuixiaomi.oss-cn-beijing.aliyuncs.com/app/poster/logo.png', // null,
     }
   },
   components: {
@@ -27,17 +25,17 @@ export default {
   methods: {
     setPreview(url) {
       this.previewUrl = url
+      this.showCrop = false
     },
     handleSelectImg() {
-      this.previewUrl = ''
-      this.originUrl = ''
       wx.chooseImage({
         count: 1,
-        sizeType: ["original", "compressed"],
-        sourceType: ["album", "camera"],
+        // sizeType: ["original", "compressed"],
+        // sourceType: ["album", "camera"],
         success: res => {
           var tempFilePaths = res.tempFilePaths
           this.originUrl = tempFilePaths[0]
+          this.showCrop = true
         }
       })
     }
@@ -49,15 +47,5 @@ export default {
 page {
   width: 100%;
   height: 100%;
-}
-.index {
-  .img-wrapper {
-    width: 500rpx;
-    height: 500rpx;
-    background-color: #53adff;
-    image {
-      background-color: pink;
-    }
-  }
 }
 </style>

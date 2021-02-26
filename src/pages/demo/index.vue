@@ -1,6 +1,7 @@
 <template>
   <view class="index">
-    <view v-html="b" class="taro_html"></view>
+    <image src="https://tuixiaomi.oss-cn-beijing.aliyuncs.com/app/wx/uploadImg/app-poster/crop/973d9e82-f924-42f0-a2e4-7241521dc555.png" />
+    <image mode="widthFix" src="https://tuixiaomi.oss-cn-beijing.aliyuncs.com/app/wx/uploadImg/app-poster/crop/973d9e82-f924-42f0-a2e4-7241521dc555.png" />
   </view>
 </template>
 
